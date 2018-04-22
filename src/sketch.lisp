@@ -68,6 +68,8 @@
 (defparameter *ship-rotation* 0)
 (defparameter *ship-max-speed* 1)
 (defparameter *ship-current-gun* :normal)
+(defparameter *ship-weapon-cooldown* 0)
+(defparameter *ship-torpedo-cooldown* 500)
 
 
 ;; Projectiles stuff
@@ -93,12 +95,17 @@
      for projectile in *projectile-pool*
      when (null (cdr projectile))
      do (setf (car projectile) *ship-current-gun*)
-       (setf (cdr projectile)
-	     (make-projectile-info
-	      ;; Position is the tip of the ship
-	      :position (list (+ (car *ship-position*) 9)
-			      (cadr *ship-position*))
-	      :angle (+ *ship-rotation* (/ pi 2.0))))
+       (when (or (eq *ship-current-gun* :normal)
+		(and (eq *ship-current-gun* :torpedo)
+		   (equal *ship-weapon-cooldown* 0)))
+	 (when (eq *ship-current-gun* :torpedo)
+	   (setf *ship-weapon-cooldown* *ship-torpedo-cooldown*))
+	 (setf (cdr projectile)
+	       (make-projectile-info
+		;; Position is the tip of the ship
+		:position (list (+ (car *ship-position*) 9)
+				(cadr *ship-position*))
+		:angle (+ *ship-rotation* (/ pi 2.0)))))
        (return-from find-free-projectile)))
 
 (defun update-projectiles (dt)
@@ -189,7 +196,10 @@
     (setf *ship-current-gun*
 	  (case *ship-current-gun*
 	    ((:normal) :torpedo)
-	    ((:torpedo) :normal)))))
+	    ((:torpedo) :normal))))
+  ;; Weapon cooldown
+  (setf *ship-weapon-cooldown*
+	(max (- *ship-weapon-cooldown* dt) 0)))
 
 
 (defun draw-ship ()
@@ -229,18 +239,29 @@
       (gsk-util:arc '(8 7.5) '(3 3) (- (/ pi 2.0)) (/ pi 2.0)))))
 
 (defun draw-hud ()
+  ;; Line
   (gl:with-pushed-matrix
     (gsk-util:no-fill)
     (gsk-util:with-stroke-color '(255 255 255)
       (gsk-util:line (list 0 (max-y))
 		     (list (max-x) (max-y)))))
+  ;; Weapon type indicator
   (gl:with-pushed-matrix
-    (gsk-util:transform-translate (list 100 (+ (max-y) 50)))
-    (gsk-util:transform-scale '(5.0 5.0))
+    (gsk-util:transform-translate (list 100 (+ (max-y) 45)))
+    (gsk-util:transform-scale '(5.0 4.5))
     (gsk-util:with-stroke-weight 3.0
       (case *ship-current-gun*
 	((:normal) (machinegun-icon))
-	((:torpedo) (torpedo-icon))))))
+	((:torpedo) (torpedo-icon)))))
+  ;; Weapon cooldown indicator
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate (list 40 (+ (max-y) 65)))
+    (gsk-util:with-stroke-color '(255 0 0)
+      (gsk-util:with-stroke-weight 5.0
+	(gsk-util:line '(0 0)
+		       (list (* 80 (/ *ship-weapon-cooldown*
+				      *ship-torpedo-cooldown*))
+			     0))))))
 
 
 (defun update (dt)
