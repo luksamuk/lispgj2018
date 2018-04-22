@@ -77,7 +77,6 @@
 (defparameter *projectile-pool*
   (loop for x from 1 to *projectile-max*
      collect (cons :normal nil)))
-(defparameter *projectile-speed* 1.3)
 
 ;; Projectile types can be :normal and :torpedo, for now, each behaving
 ;; differently.
@@ -93,12 +92,13 @@
   (loop named find-free-projectile
      for projectile in *projectile-pool*
      when (null (cdr projectile))
-     do (setf (cdr projectile)
-	      (make-projectile-info
-	       ;; Position is the tip of the ship
-	       :position (list (+ (car *ship-position*) 9)
-			       (cadr *ship-position*))
-	       :angle (+ *ship-rotation* (/ pi 2.0))))
+     do (setf (car projectile) *ship-current-gun*)
+       (setf (cdr projectile)
+	     (make-projectile-info
+	      ;; Position is the tip of the ship
+	      :position (list (+ (car *ship-position*) 9)
+			      (cadr *ship-position*))
+	      :angle (+ *ship-rotation* (/ pi 2.0))))
        (return-from find-free-projectile)))
 
 (defun update-projectiles (dt)
@@ -109,22 +109,23 @@
      do (let* ((projectile-type (car projectile))
 	       (projectile-info (cdr projectile))
 	       (projectile-position (projectile-info-position projectile-info))
-	       (projectile-angle (projectile-info-angle projectile-info)))
-	  (case projectile-type
-	    ((:normal)
-	     (if (> (car projectile-position) (max-x))
-		 (setf (cdr projectile) nil)
-		 (progn
-		   (setf (projectile-info-position (cdr projectile))
-			 (list (+ (car projectile-position)
-				  (* *projectile-speed*
-				     (sin projectile-angle)
-				     dt))
-			       (mod (+ (cadr projectile-position)
-				       (* *projectile-speed*
-					  (- (cos projectile-angle))
-					  dt))
-				    (max-y)))))))))))
+	       (projectile-angle (projectile-info-angle projectile-info))
+	       (projectile-speed (case projectile-type
+				   ((:normal) 1.3)
+				   ((:torpedo) 0.7))))
+	  (if (> (car projectile-position) (max-x))
+	      (setf (cdr projectile) nil)
+	      (progn
+		(setf (projectile-info-position (cdr projectile))
+		      (list (+ (car projectile-position)
+			       (* projectile-speed
+				  (sin projectile-angle)
+				  dt))
+			    (mod (+ (cadr projectile-position)
+				    (* projectile-speed
+				       (- (cos projectile-angle))
+				       dt))
+				 (max-y)))))))))
 
 (defun draw-projectiles ()
   (loop for projectile in *projectile-pool*
@@ -132,17 +133,20 @@
      do (let ((projectile-type (car projectile))
 	      (projectile-position (projectile-info-position (cdr projectile)))
 	      (projectile-angle (projectile-info-angle (cdr projectile))))
-	  (case projectile-type
-	    ((:normal)
-	     (gl:with-pushed-matrix
+	  (gl:with-pushed-matrix
 	       (gsk-util:transform-translate projectile-position)
 	       (gsk-util:transform-rotate projectile-angle)
-	       (gsk-util:stroke-weight 1.0)
-	       (gsk-util:with-stroke-color '(255 0 0)
-		 (gsk-util:with-fill-color '(128 0 90)
-		   (gsk-util:ellipse '(0 0) '(8 8))))))))))
-	  
-	  
+	       (case projectile-type
+		 ((:normal)
+		  (gsk-util:with-stroke-weight 1.0
+		    (gsk-util:with-stroke-color '(255 0 0)
+		      (gsk-util:with-fill-color '(128 0 90)
+			(gsk-util:ellipse '(0 0) '(8 8))))))
+		 ((:torpedo)
+		  (gsk-util:with-stroke-weight 3.0
+		    (gsk-util:with-stroke-color '(255 0 0)
+		      (gsk-util:with-fill-color '(128 0 90)
+			(gsk-util:rect '(-5 0) '(5 20)))))))))))
 
 
 (defun update-ship (dt)
@@ -172,10 +176,20 @@
     ;; manually since the ship was snapping weirdly
     (when (< y 0) (setf (cadr *ship-position*) (max-y)))
     (when (> y (max-y)) (setf (cadr *ship-position*) 0)))
-  ;; Shoot
-  (when (gsk-input:pressingp :a)
+  ;; Shoot.
+  ;; Check for key presses on normal gun (machinegun), and
+  ;; single keypresses for torpedo.
+  (when (case *ship-current-gun*
+	  ((:normal) (gsk-input:pressingp :a))
+	  ((:torpedo) (gsk-input:pressedp :a))
+	  (otherwise nil))
     (shoot))
-  (update-projectiles dt))
+  ;; Replace weapon
+  (when (gsk-input:pressedp :y)
+    (setf *ship-current-gun*
+	  (case *ship-current-gun*
+	    ((:normal) :torpedo)
+	    ((:torpedo) :normal)))))
 
 
 (defun draw-ship ()
@@ -184,28 +198,61 @@
     (gsk-util:transform-rotate (+ *ship-rotation* (/ pi 2.0)))
     (gsk-util:no-fill)
     (gsk-util:with-stroke-color '(255 255 255)
-      (gsk-util:triangle '(0 -15) '(9 12) '(-9 12))))
-  (draw-projectiles))
+      (gsk-util:triangle '(0 -15) '(9 12) '(-9 12)))))
 
 
 ;;; HUD-related
+
+(defun machinegun-icon ()
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate '(-10 -10))
+    (gsk-util:no-fill)
+    (gsk-util:with-stroke-color '(128 0 90)
+      ;; 1st row
+      (gsk-util:rect '(0 5) '(3 2))
+      (gsk-util:rect '(0 7) '(3 2))
+      (gsk-util:rect '(0 9) '(3 2))
+      ;; 2nd row
+      (gsk-util:rect '(3 6) '(3 2))
+      (gsk-util:rect '(3 8) '(3 2))
+      ;; 3rd part
+      (gsk-util:rect '(6 7) '(3 2)))))
+
+(defun torpedo-icon ()
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate '(-10 -10))
+    (gsk-util:no-fill)
+    (gsk-util:with-stroke-color '(128 0 90)
+      (gsk-util:rect '(0 6) '(8 3))
+      (gsk-util:triangle '(3 3) '(8 6) '(3 6))
+      (gsk-util:triangle '(3 9) '(8 9) '(3 12))
+      (gsk-util:arc '(8 7.5) '(3 3) (- (/ pi 2.0)) (/ pi 2.0)))))
 
 (defun draw-hud ()
   (gl:with-pushed-matrix
     (gsk-util:no-fill)
     (gsk-util:with-stroke-color '(255 255 255)
       (gsk-util:line (list 0 (max-y))
-		     (list (max-x) (max-y))))))
-     
+		     (list (max-x) (max-y)))))
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate (list 100 (+ (max-y) 50)))
+    (gsk-util:transform-scale '(5.0 5.0))
+    (gsk-util:with-stroke-weight 3.0
+      (case *ship-current-gun*
+	((:normal) (machinegun-icon))
+	((:torpedo) (torpedo-icon))))))
+
 
 (defun update (dt)
   (update-stars dt)
-  (update-ship dt))
+  (update-ship dt)
+  (update-projectiles dt))
 
 (defun draw ()
   (draw-stars)
   (draw-ship)
-  (draw-hud))
+  (draw-hud)
+  (draw-projectiles))
 
 (gsk:add-update-callback 'update)
 (gsk:add-draw-callback 'draw)
