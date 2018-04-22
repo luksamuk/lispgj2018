@@ -8,15 +8,34 @@
      (list (+ (car ,position) (car center))
 	   (+ (cadr ,position) (cadr center)))))
 
-(defun gen-random-star ()
-  (list (random 960)
-	(random 540)))
 
+;;; Some general values
+(defparameter *boundaries* (list (cons 0 960)
+				 (cons 0 460)))
+
+(defparameter *lod* :low)
+
+(defmacro max-x ()
+  `(cdr (car *boundaries*)))
+
+(defmacro max-y ()
+  `(cdr (cadr *boundaries*)))
 
 ;;; Background-related
+
+(defun gen-random-star ()
+  (list (random 960)
+	(random 460)))
+
+
 (defparameter *stars-positions*
+  (let ((stars-amount (case *lod*
+			((:low)  15)
+			((:mid)  20)
+			((:high) 30)
+			(otherwise 15))))
   (loop for x from 0 to 2
-     collect (loop for y from 0 to 25 collect (gen-random-star))))
+     collect (loop for y from 0 to stars-amount collect (gen-random-star)))))
 (defparameter *stars-parallax-centers* '(0 0 0))
 (defparameter *stars-parallax-factors* '(0.5 0.8 1.1))
 
@@ -24,7 +43,7 @@
   (setf *stars-parallax-centers*
 	(loop for center in *stars-parallax-centers*
 	   for factor in *stars-parallax-factors*
-	   collect (mod (- center (* factor dt)) 960))))
+	   collect (mod (- center (* factor dt)) (max-x)))))
 
 (defun draw-stars ()
   (loop for layer in *stars-positions*
@@ -32,14 +51,13 @@
      do (loop for star in layer
 	   do (let ((position (list (mod (+ (nth n *stars-parallax-centers*)
 					    (car star))
-					 960)
+					 (max-x))
 				    (cadr star))))
 		(gl:with-pushed-matrix
 		  (gsk-util:transform-translate position)
 		  (gsk-util:no-stroke)
 		  (gsk-util:with-fill-color '(255 255 255)
-		    (gsk-util:ellipse '(0 0) '(5 5))
-		    ))))))
+		    (gsk-util:ellipse '(0 0) '(5 5))))))))
 
 ;;; Ship-related
 
@@ -72,9 +90,9 @@
     ;; I was using a `mod` form on the previous statement
     ;; to ensure a wraparound, but I figured I'd better do it
     ;; manually since the ship was snapping weirdly
-    (when (< y 0) (setf (cadr *ship-position*) 540))
-    (when (> y 540) (setf (cadr *ship-position*) 0))))
-	       
+    (when (< y 0) (setf (cadr *ship-position*) (max-y)))
+    (when (> y (max-y)) (setf (cadr *ship-position*) 0))))
+
 
 (defun draw-ship ()
   (gl:with-pushed-matrix
@@ -84,13 +102,25 @@
     (gsk-util:with-stroke-color '(255 255 255)
       (gsk-util:triangle '(0 -15) '(9 12) '(-9 12)))))
 
+
+;;; HUD-related
+
+(defun draw-hud ()
+  (gl:with-pushed-matrix
+    (gsk-util:no-fill)
+    (gsk-util:with-stroke-color '(255 255 255)
+      (gsk-util:line (list 0 (max-y))
+		     (list (max-x) (max-y))))))
+     
+
 (defun update (dt)
   (update-stars dt)
   (update-ship dt))
 
 (defun draw ()
   (draw-stars)
-  (draw-ship))
+  (draw-ship)
+  (draw-hud))
 
 (gsk:add-update-callback 'update)
 (gsk:add-draw-callback 'draw)
