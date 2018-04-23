@@ -264,9 +264,10 @@
 				      *ship-torpedo-cooldown*))
 			     0)))))
   ;; Text for test.... yeah.
-  (gsk-util:with-fill-color '(255 255 255)
-    (gsk-util:no-stroke)
-    (gsk-util:text "T e s t" '(100 100))))
+  ;;(gsk-util:with-fill-color '(255 255 255)
+  ;;  (gsk-util:no-stroke)
+  ;;  (gsk-util:text "T e s t" '(100 100)))
+  )
 
 
 (defun update (dt)
