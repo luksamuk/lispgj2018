@@ -8,12 +8,13 @@
      (list (+ (car ,position) (car center))
 	   (+ (cadr ,position) (cadr center)))))
 
+(gsk-util:set-font-texture "../res/gohufont.png" '(6 11))
 
 ;;; Some general values
 (defparameter *boundaries* (list (cons 0 960)
 				 (cons 0 460)))
-
 (defparameter *lod* :low)
+(defparameter *paused* nil)
 
 (defmacro max-x ()
   `(cdr (car *boundaries*)))
@@ -261,19 +262,36 @@
 	(gsk-util:line '(0 0)
 		       (list (* 80 (/ *ship-weapon-cooldown*
 				      *ship-torpedo-cooldown*))
-			     0))))))
+			     0)))))
+  ;; Text for test.... yeah.
+  (gsk-util:with-fill-color '(255 255 255)
+    (gsk-util:no-stroke)
+    (gsk-util:text "T e s t" '(100 100))))
 
 
 (defun update (dt)
-  (update-stars dt)
-  (update-ship dt)
-  (update-projectiles dt))
+  (when (gsk-input:pressedp :start)
+    (setf *paused* (not *paused*)))
+  (when (not *paused*)
+    (update-stars dt)
+    (update-ship dt)
+    (update-projectiles dt)))
 
 (defun draw ()
   (draw-stars)
   (draw-ship)
   (draw-hud)
   (draw-projectiles))
+
+(defun restart-game ()
+  (gsk:next-frame
+    (setf *ship-current-gun* :normal)
+    (setf *ship-position* (from-center '(-400 0)))
+    (setf *ship-weapon-cooldown* 0)
+    (setf *projectile-pool*
+	  (loop for x from 1 to *projectile-max*
+	     collect (cons :normal nil)))))
+    
 
 (gsk:add-update-callback 'update)
 (gsk:add-draw-callback 'draw)
