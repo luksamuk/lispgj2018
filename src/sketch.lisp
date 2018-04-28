@@ -1,3 +1,9 @@
+;;;; ORBIT DEFENSE STRIKEFORCE V0.1
+;;;; Copyright (C) 2018 Lucas Vieira
+;;;;
+;;;; This code is distributed under the MIT License.
+;;;; See `LICENSE` for details.
+
 (ql:quickload 'game-sketch)
 
 (defmacro at-screen-center ()
@@ -42,7 +48,7 @@
 
 (defparameter *stars-positions* (gen-stars))
 (defparameter *stars-parallax-centers* '(0 0 0))
-(defparameter *stars-parallax-factors* '(0.5 0.8 1.1))
+(defparameter *stars-parallax-factors* '(0.3 0.6 0.9))
 
 (defun update-stars (dt)
   (setf *stars-parallax-centers*
@@ -129,7 +135,8 @@
   (when (> *level-step* *level-pace*)
     (setf *level-step* (mod *level-step*
 			    *level-pace*))
-    (incf *level-position*))
+    (incf *level-position*)
+    (incf *score*))
   (when (not (= *level-position* *level-last-spawn-moment*))
     (let ((spawn-data (gethash *level-position* *level-layout*)))
       (when spawn-data
@@ -507,7 +514,9 @@
 	    (gsk-util:text "ORBIT DEFENSE" '(-250 -40))
 	    (gsk-util:text  "STRIKEFORCE"  '(-210 20))
 	    (gsk-util:text-size 3.0)
-	    (gsk-util:text "*press start to play*" '(-250 150)))
+	    (gsk-util:text "*press start to play*" '(-250 150))
+	    (gsk-util:text-size 1.0)
+	    (gsk-util:text "Copyright (C) 2018 Lucas Vieira" '(220 -170)))
 	  ;; Game over screen
 	  (progn
 	    (gsk-util:text-size 5.0)
@@ -605,6 +614,7 @@
   ;; Reset level
   (when (> *score* *high*)
     (setf *high* *score*))
+  (setf *score* 0)
   (setf *level-position* 0)
   (setf *level-last-spawn-moment* 0)
   (setf *onscreen-enemies* nil)
