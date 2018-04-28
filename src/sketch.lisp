@@ -8,13 +8,13 @@
      (list (+ (car ,position) (car center))
 	   (+ (cadr ,position) (cadr center)))))
 
-(gsk-util:set-font-texture "../res/gohufont.png" '(6 11))
-
 ;;; Some general values
 (defparameter *boundaries* (list (cons 0 960)
 				 (cons 0 460)))
 (defparameter *lod* :low)
 (defparameter *paused* nil)
+(defparameter *score* 0)
+(defparameter *high* 0)
 
 (defmacro max-x ()
   `(cdr (car *boundaries*)))
@@ -61,6 +61,66 @@
 		  (gsk-util:no-stroke)
 		  (gsk-util:with-fill-color '(255 255 255)
 		    (gsk-util:ellipse '(0 0) '(5 5))))))))
+
+
+;;; Enemy-related
+(defstruct enemy
+  type
+  position
+  angle
+  (alive t))
+
+(defmethod update-troop (troop dt)
+  (decf (car (enemy-position troop)) (* 0.5 dt)))
+
+(defmethod update-enemy ((the-enemy enemy) dt)
+  (case (enemy-type the-enemy)
+    ((:troop) (update-troop the-enemy dt)))
+  (when (< (car (enemy-position the-enemy)) 0)
+    (setf (enemy-alive the-enemy) nil)))
+
+(defmethod draw-enemy ((the-enemy enemy))
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate (enemy-position the-enemy))
+    (gsk-util:transform-rotate (enemy-angle the-enemy))
+    (gsk-util:transform-scale '(2.0 2.0))
+    (case (enemy-type the-enemy)
+      ((:troop)
+       (gsk-util:with-stroke-color '(128 0 80)
+	 (gsk-util:with-stroke-weight 6.0
+	   (gsk-util:triangle '(0 -15) '(9 12) '(-9 12))))))))
+     
+
+
+;;; Level-related
+(defparameter *level-layout* (make-hash-table))
+(defparameter *level-size* 600)
+(defparameter *level-step* 0)
+(defparameter *level-pace* 100)
+(defparameter *level-last-spawn-moment* 0)
+(defparameter *level-position* 0)
+(defparameter *onscreen-enemies* nil)
+
+(defun spawn-enemy (type height)
+  (push (make-enemy :type type
+		    :position (list (+ (max-x) 50)
+				    height)
+		    :angle (/ (* pi 3.0) 2.0))
+	*onscreen-enemies*))
+
+(defun level-update (dt)
+  (incf *level-step* dt)
+  (when (> *level-step* *level-pace*)
+    (setf *level-step* (mod *level-step*
+			    *level-pace*))
+    (incf *level-position*))
+  (when (not (= *level-position* *level-last-spawn-moment*))
+    (let ((spawn-data (gethash *level-position* *level-layout*)))
+      (when spawn-data
+	;; spawn stuff
+	(loop for enemy in spawn-data
+	   do (spawn-enemy (car enemy) (cadr enemy)))
+	(setf *level-last-spawn-moment* *level-position*)))))
 
 
 ;;; Ship-related
@@ -240,6 +300,14 @@
       (gsk-util:arc '(8 7.5) '(3 3) (- (/ pi 2.0)) (/ pi 2.0)))))
 
 (defun draw-hud ()
+  ;; Debug level pace
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate '(10 20))
+    (gsk-util:with-fill-color '(255 255 255)
+      (gsk-util:no-stroke)
+      (gsk-util:text-size 1.0)
+      (gsk-util:text (format nil "levelposition: ~12,'0d" *level-position*)
+		     '(0 0))))
   ;; Line
   (gl:with-pushed-matrix
     (gsk-util:no-fill)
@@ -260,15 +328,34 @@
     (gsk-util:with-stroke-color '(255 0 0)
       (gsk-util:with-stroke-weight 5.0
 	(gsk-util:line '(0 0)
-		       (list (* 80 (/ *ship-weapon-cooldown*
+		       (list (* 180 (/ *ship-weapon-cooldown*
 				      *ship-torpedo-cooldown*))
 			     0)))))
-  ;; Text for test.... yeah.
-  ;;(gsk-util:with-fill-color '(255 255 255)
-  ;;  (gsk-util:no-stroke)
-  ;;  (gsk-util:text "T e s t" '(100 100)))
-  )
+  ;; Weapon ammo indicator
+  (when (not (eq *ship-current-gun* :normal))
+    (gl:with-pushed-matrix
+      (gsk-util:transform-translate (list 120 (+ (max-y) 35)))
+      (gsk-util:no-stroke)
+      (gsk-util:text-size 3.0)
+      (gsk-util:text (format nil "x~3,'0d" 0) '(0 0))))
+  ;; Score indicator
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate (list (- (max-x) 320)
+					(+ (max-y) 25)))
+    (gsk-util:with-fill-color '(255 255 255)
+      (gsk-util:no-stroke)
+      (gsk-util:text-size 2.0)
+      ;; Score
+      (gsk-util:text (format nil "Score: ~12,'0d" *score*)
+		     '(0 0))
+      ;; High-score
+      (gsk-util:transform-translate '(0 30))
+      (gsk-util:text (format nil "High:  ~12,'0d" 100)
+		     '(0 0)))))
 
+(defun setup ()
+  (gsk-util:set-font-texture "../res/gohufont.png" '(8 13))
+  (spawn-enemy :troop 300))
 
 (defun update (dt)
   (when (gsk-input:pressedp :start)
@@ -276,16 +363,50 @@
   (when (not *paused*)
     (update-stars dt)
     (update-ship dt)
-    (update-projectiles dt)))
+    (update-projectiles dt)
+    (level-update dt)
+    (loop for enemy in *onscreen-enemies*
+       do (update-enemy enemy dt))
+    (setf *onscreen-enemies*
+	  (remove-if (lambda (enemy)
+		       (eq (enemy-alive enemy) nil))
+		     *onscreen-enemies*))))
 
 (defun draw ()
   (draw-stars)
   (draw-ship)
   (draw-hud)
-  (draw-projectiles))
+  (draw-projectiles)
+  (loop for enemy in *onscreen-enemies*
+       do (draw-enemy enemy)))
+
+
+(defun load-placeholder-level ()
+  (setf *level-layout* (make-hash-table))
+  (loop for x from 0 to 9
+     do (let ((base-time (* x 40)))
+	  (setf (gethash base-time *level-layout*)
+		'((:troop 100)
+		  (:troop 250)
+		  (:troop 400)))
+	  (setf (gethash (+ base-time 20) *level-layout*)
+		'((:troop 175)
+		  (:troop 325))))))
+  
+				      
+
 
 (defun restart-game ()
   (gsk:next-frame
+    ;; Reset level
+    (when (> *score* *high*)
+      (setf *high* *score*))
+    (setf *level-position* 0)
+    (setf *onscreen-enemies* nil)
+    ;; TODO: reload level 0
+    ;; for now we're loading the placeholder level.
+    (load-placeholder-level)
+    ;; Reset ship specs
     (setf *ship-current-gun* :normal)
     (setf *ship-position* (from-center '(-400 0)))
     (setf *ship-weapon-cooldown* 0)
@@ -294,6 +415,7 @@
 	     collect (cons :normal nil)))))
     
 
+(gsk:add-setup-callback 'setup)
 (gsk:add-update-callback 'update)
 (gsk:add-draw-callback 'draw)
 
