@@ -123,7 +123,7 @@
 	*onscreen-enemies*))
 
 (defun level-update (dt)
-  (incf *level-step* dt)
+  (when *ship-alive* (incf *level-step* dt))
   (when (> *level-step* *level-pace*)
     (setf *level-step* (mod *level-step*
 			    *level-pace*))
@@ -146,6 +146,8 @@
 (defparameter *ship-weapon-cooldown* 0)
 (defparameter *ship-torpedo-cooldown* 500)
 (defparameter *ship-health* 100)
+(defparameter *ship-ammo* 20)
+(defparameter *ship-alive* t)
 
 
 ;; Projectiles stuff
@@ -175,7 +177,8 @@
 		(and (eq *ship-current-gun* :torpedo)
 		   (equal *ship-weapon-cooldown* 0)))
 	 (when (eq *ship-current-gun* :torpedo)
-	   (setf *ship-weapon-cooldown* *ship-torpedo-cooldown*))
+	   (setf *ship-weapon-cooldown* *ship-torpedo-cooldown*)
+	   (decf *ship-ammo*))
 	 (setf (cdr projectile)
 	       (make-projectile-info
 		;; Position is the tip of the ship
@@ -351,7 +354,8 @@
   ;; single keypresses for torpedo.
   (when (case *ship-current-gun*
 	  ((:normal) (gsk-input:pressingp :a))
-	  ((:torpedo) (gsk-input:pressedp :a))
+	  ((:torpedo) (and (gsk-input:pressedp :a)
+			 (> *ship-ammo* 0)))
 	  (otherwise nil))
     (shoot))
   ;; Replace weapon
@@ -362,7 +366,10 @@
 	    ((:torpedo) :normal))))
   ;; Weapon cooldown
   (setf *ship-weapon-cooldown*
-	(max (- *ship-weapon-cooldown* dt) 0)))
+	(max (- *ship-weapon-cooldown* dt) 0))
+  ;; Kill ship
+  (when (<= *ship-health* 0)
+    (setf *ship-alive* nil)))
 
 
 (defun draw-ship ()
@@ -434,12 +441,15 @@
 				      *ship-torpedo-cooldown*))
 			     0)))))
   ;; Weapon ammo indicator
-  (when (not (eq *ship-current-gun* :normal))
-    (gl:with-pushed-matrix
-      (gsk-util:transform-translate (list 120 (+ (max-y) 35)))
-      (gsk-util:no-stroke)
-      (gsk-util:text-size 3.0)
-      (gsk-util:text (format nil "x~3,'0d" 0) '(0 0))))
+  (gl:with-pushed-matrix
+    (gsk-util:transform-translate (list 120 (+ (max-y) 35)))
+    (gsk-util:no-stroke)
+    (gsk-util:text-size 3.0)
+    (gsk-util:text
+     (if (eq *ship-current-gun* :normal)
+	 (format nil "x999")
+	 (format nil "x~3,'0d" *ship-ammo*))
+     '(0 0)))
   ;; Ship health indicator
   (gl:with-pushed-matrix
       (gsk-util:transform-translate (list (- (/ (max-x) 2.0) 40.0)
@@ -455,7 +465,12 @@
 			 100.0))))
     (gsk-util:with-stroke-color '(255 255 255)
       (gsk-util:text-size 1.0)
-      (gsk-util:text "Health" '(-20 0))))
+      (gsk-util:text (if (= *ship-health* 100)
+			 "Health"
+			 (format nil "~3,'0d%" *ship-health*))
+		     (if (= *ship-health* 100)
+			 '(-20 0)
+			 '(-10 0)))))
   ;; Score indicator
   (gl:with-pushed-matrix
     (gsk-util:transform-translate (list (- (max-x) 320)
@@ -482,11 +497,12 @@
     (restart-game))
   (when (not *paused*)
     (update-stars dt)
-    (update-ship dt)
+    (when *ship-alive* (update-ship dt))
     (update-projectiles dt)
     (level-update dt)
     (loop for enemy in *onscreen-enemies*
-       do (when (check-collision-player-troop (enemy-position enemy))
+       do (when (and *ship-alive*
+		   (check-collision-player-troop (enemy-position enemy)))
 	    (setf (enemy-alive enemy) nil)
 	    (decf *ship-health* 25))
 	 (update-enemy enemy dt))
@@ -497,14 +513,14 @@
 
 (defun draw ()
   (draw-stars)
-  (draw-ship)
+  (when *ship-alive* (draw-ship))
   (draw-hud)
   (draw-projectiles)
   (loop for enemy in *onscreen-enemies*
        do (draw-enemy enemy)))
 
 
-(defun load-placeholder-level ()
+(defun load-level-1 ()
   (setf *level-layout* (make-hash-table))
   (loop for x from 0 to 5
      do (let ((base-time (* x 40)))
@@ -516,25 +532,33 @@
 		'((:troop 175)
 		  (:troop 325)))))
   ;; Troops to the middle
-  (setf (gethash 260 *level-layout*) '((:troop 230)))
-  (setf (gethash 265 *level-layout*) '((:troop 180)
-				       (:troop 280)))
-  (setf (gethash 270 *level-layout*) '((:troop 130)
-				       (:troop 330)))
-  ;; Troops on the top
-  (setf (gethash 290 *level-layout*) '((:troop 180)))
-  (setf (gethash 295 *level-layout*) '((:troop 130)
-				       (:troop 230)))
-  (setf (gethash 300 *level-layout*) '((:troop 80)
-				       (:troop 280)))
-  ;; Troops below
-  (setf (gethash 320 *level-layout*) '((:troop 280)))
-  (setf (gethash 325 *level-layout*) '((:troop 230)
-				       (:troop 330)))
-  (setf (gethash 330 *level-layout*) '((:troop 180)
-				       (:troop 380))))
-  
-				      
+  (loop for x from 0 to 5
+     do (let ((base-time (+ 260 (* x 30))))
+	  (setf (gethash base-time *level-layout*) '((:troop 230)))
+	  (setf (gethash (+ base-time 5) *level-layout*) '((:troop 180)
+							   (:troop 280)))
+	  (setf (gethash (+ base-time 10) *level-layout*) '((:troop 130)
+							    (:troop 330)))
+	  ;; Troops on the top
+	  (setf (gethash (+ base-time 30) *level-layout*) '((:troop 180)))
+	  (setf (gethash (+ base-time 35) *level-layout*) '((:troop 130)
+							    (:troop 230)))
+	  (setf (gethash (+ base-time 40) *level-layout*) '((:troop 80)
+							    (:troop 280)))
+	  ;; Troops below
+	  (setf (gethash (+ base-time 60) *level-layout*) '((:troop 280)))
+	  (setf (gethash (+ base-time 65) *level-layout*) '((:troop 230)
+							    (:troop 330)))
+	  (setf (gethash (+ base-time 70) *level-layout*) '((:troop 180)
+							    (:troop 380))))))
+
+
+(defun load-level (which)
+  (case which
+    ((1) (load-level-1))
+    ((2)
+     ;; TO-DO
+     )))
 
 
 (defun restart-game ()
@@ -545,14 +569,15 @@
     (setf *level-position* 0)
     (setf *level-last-spawn-moment* 0)
     (setf *onscreen-enemies* nil)
-    ;; TODO: reload level 0
-    ;; for now we're loading the placeholder level.
-    (load-placeholder-level)
+    ;; Load first level
+    (load-level 1)
     ;; Reset ship specs
     (setf *ship-current-gun* :normal)
     (setf *ship-position* (from-center '(-400 0)))
     (setf *ship-weapon-cooldown* 0)
     (setf *ship-health* 100)
+    (setf *ship-ammo* 20)
+    (setf *ship-alive* t)
     (setf *projectile-pool*
 	  (loop for x from 1 to *projectile-max*
 	     collect (cons :normal nil)))))
@@ -563,3 +588,7 @@
 (gsk:add-draw-callback 'draw)
 
 ;;(gsk:run-sketch)
+
+(defun run-game ()
+  (restart-game)
+  (gsk:run-sketch))
