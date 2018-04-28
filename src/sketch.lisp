@@ -15,6 +15,8 @@
 (defparameter *paused* nil)
 (defparameter *score* 0)
 (defparameter *high* 0)
+(defparameter *game-over* t)
+(defparameter *first-play* t)
 
 (defmacro max-x ()
   `(cdr (car *boundaries*)))
@@ -369,7 +371,8 @@
 	(max (- *ship-weapon-cooldown* dt) 0))
   ;; Kill ship
   (when (<= *ship-health* 0)
-    (setf *ship-alive* nil)))
+    (setf *ship-alive* nil)
+    (setf *game-over* t)))
 
 
 (defun draw-ship ()
@@ -486,15 +489,50 @@
       (gsk-util:text (format nil "High:  ~12,'0d" *high*)
 		     '(0 0)))))
 
+
+;;; Screens and whatnot
+(defun draw-game-over-screen ()
+  (gl:with-pushed-matrix
+    (gsk-util:with-fill-color '(0 0 0 128)
+      (gsk-util:rect '(0 0) '(960 460)))
+    (gsk-util:no-stroke)
+    (gsk-util:with-fill-color '(255 255 255)
+      (gsk-util:transform-translate (list (/ (max-x) 2.0)
+					  (- (/ (max-y) 2.0)
+					     30)))
+      (if *first-play*
+	  ;; Title screen
+	  (progn
+	    (gsk-util:text-size 5.0)
+	    (gsk-util:text "ORBIT DEFENSE" '(-250 -40))
+	    (gsk-util:text  "STRIKEFORCE"  '(-210 20))
+	    (gsk-util:text-size 3.0)
+	    (gsk-util:text "*press start to play*" '(-250 150)))
+	  ;; Game over screen
+	  (progn
+	    (gsk-util:text-size 5.0)
+	    (gsk-util:text "GAME OVER" '(-160 0))
+	    (gsk-util:transform-translate '(0 40))
+	    (gsk-util:text-size 2.0)
+	    (gsk-util:text (format nil "Your Score: ~12,'0d" *score*) '(-185 0))
+	    (gsk-util:transform-translate '(0 60))
+	    (gsk-util:text "*press start to play again*" '(-210 0)))))))
+
+
+
+;;; General
 (defun setup ()
-  (gsk-util:set-font-texture "../res/gohufont.png" '(8 13))
-  (spawn-enemy :troop 300))
+  (gsk-util:set-font-texture "../res/gohufont.png" '(8 13)))
 
 (defun update (dt)
-  (when (gsk-input:pressedp :start)
-    (setf *paused* (not *paused*)))
-  (when (gsk-input:pressedp :b)
-    (restart-game))
+  ;; Restart or begin game when needed
+  (if *game-over*
+      (when (gsk-input:pressedp :start)
+	(setf *first-play* nil)
+	(restart-game))
+      (when (gsk-input:pressedp :start)
+	(setf *paused* (not *paused*))))
+  
   (when (not *paused*)
     (update-stars dt)
     (when *ship-alive* (update-ship dt))
@@ -517,7 +555,9 @@
   (draw-hud)
   (draw-projectiles)
   (loop for enemy in *onscreen-enemies*
-       do (draw-enemy enemy)))
+     do (draw-enemy enemy))
+  (when *game-over*
+    (draw-game-over-screen)))
 
 
 (defun load-level-1 ()
@@ -562,25 +602,25 @@
 
 
 (defun restart-game ()
-  (gsk:next-frame
-    ;; Reset level
-    (when (> *score* *high*)
-      (setf *high* *score*))
-    (setf *level-position* 0)
-    (setf *level-last-spawn-moment* 0)
-    (setf *onscreen-enemies* nil)
-    ;; Load first level
-    (load-level 1)
-    ;; Reset ship specs
-    (setf *ship-current-gun* :normal)
-    (setf *ship-position* (from-center '(-400 0)))
-    (setf *ship-weapon-cooldown* 0)
-    (setf *ship-health* 100)
-    (setf *ship-ammo* 20)
-    (setf *ship-alive* t)
-    (setf *projectile-pool*
-	  (loop for x from 1 to *projectile-max*
-	     collect (cons :normal nil)))))
+  ;; Reset level
+  (when (> *score* *high*)
+    (setf *high* *score*))
+  (setf *level-position* 0)
+  (setf *level-last-spawn-moment* 0)
+  (setf *onscreen-enemies* nil)
+  (setf *game-over* nil)
+  ;; Load first level
+  (load-level 1)
+  ;; Reset ship specs
+  (setf *ship-current-gun* :normal)
+  (setf *ship-position* (from-center '(-400 0)))
+  (setf *ship-weapon-cooldown* 0)
+  (setf *ship-health* 100)
+  (setf *ship-ammo* 20)
+  (setf *ship-alive* t)
+  (setf *projectile-pool*
+	(loop for x from 1 to *projectile-max*
+	   collect (cons :normal nil))))
     
 
 (gsk:add-setup-callback 'setup)
@@ -591,4 +631,7 @@
 
 (defun run-game ()
   (restart-game)
+  (setf *first-play* t)
+  (setf *game-over* t)
+  (setf *ship-alive* nil)
   (gsk:run-sketch))
