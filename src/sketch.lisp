@@ -69,6 +69,7 @@
   position
   angle
   health
+  (flash 0)
   (alive t))
 
 (defmethod update-troop (troop dt)
@@ -77,8 +78,13 @@
 (defmethod update-enemy ((the-enemy enemy) dt)
   (case (enemy-type the-enemy)
     ((:troop) (update-troop the-enemy dt)))
+  (when (> (enemy-flash the-enemy) 0) (decf (enemy-flash the-enemy) dt))
+  (when (< (enemy-flash the-enemy) 0) (setf (enemy-flash the-enemy) 0))
   (when (< (car (enemy-position the-enemy)) 0)
-    (setf (enemy-alive the-enemy) nil)))
+    (setf (enemy-alive the-enemy) nil))
+  (when (<= (enemy-health the-enemy) 0)
+    (setf (enemy-alive the-enemy) nil)
+    (incf *score* 100)))
 
 (defmethod draw-enemy ((the-enemy enemy))
   (gl:with-pushed-matrix
@@ -87,9 +93,13 @@
     (gsk-util:transform-scale '(2.0 2.0))
     (case (enemy-type the-enemy)
       ((:troop)
+       (if (> (enemy-flash the-enemy) 0)
+	   (gsk-util:fill-primitive '(255 255 255))
+	   (gsk-util:no-fill))
        (gsk-util:with-stroke-color '(128 0 80)
 	 (gsk-util:with-stroke-weight 6.0
-	   (gsk-util:triangle '(0 -15) '(9 12) '(-9 12))))))))
+	   (gsk-util:triangle '(0 -15) '(9 12) '(-9 12))))
+       (gsk-util:no-fill)))))
      
 
 
@@ -106,7 +116,10 @@
   (push (make-enemy :type type
 		    :position (list (+ (max-x) 50)
 				    height)
-		    :angle (/ (* pi 3.0) 2.0))
+		    :angle (/ (* pi 3.0) 2.0)
+		    :health (case type
+			      ((:troop) 10)
+			      (otherwise 1)))
 	*onscreen-enemies*))
 
 (defun level-update (dt)
@@ -171,6 +184,76 @@
 		:angle (+ *ship-rotation* (/ pi 2.0)))))
        (return-from find-free-projectile)))
 
+;; Collision detection functions
+(defmethod vector2-sub ((a list) (b list))
+  "Compute a subtraction between two 2D vectors."
+  (list (- (car a) (car b))
+	(- (cadr a) (cadr b))))
+
+(defmethod vector2-dot ((a list) (b list))
+  "Compute a dot product between two 2D vectors."
+  (+ (* (car a)
+	(car b))
+     (* (cadr a)
+	(cadr b))))
+
+(defmethod vector2-square-distance ((a list) (b list))
+  (let ((delta-x (- (car b)
+		    (car a)))
+	(delta-y (- (cadr b)
+		    (cadr a))))
+    (+ (* delta-x delta-x)
+       (* delta-y delta-y))))
+
+#||(defun closest-pt-point-triangle (circle-center triangle-points)
+  ;; YAP, DO NOT USE THIS, this is not complete -- obviously.
+  ;; triangle points is a list (a b c) where each letter is a vertex
+  ;; on the triangle.
+  ;; Also, sorry for the nested let blocks here. I'm trying to organize
+  ;; my thoughts.
+  (let ((ab (vector2-sub (cadr triangle-points)
+			 (car triangle-points)))
+	(ac (vector2-sub (caddr triangle-points)
+			 (car triangle-points)))
+	(bc (vector2-sub (caddr triangle-points)
+			 (cadr triangle-points))))
+    ;; Compute parametric positions
+    (let ((s-nom (vector2-dot (vector2-sub circle-center
+					   (car triangle-points))
+			      ab))
+	  (s-denom (vector2-dot (vector2-sub circle-center
+					     (cadr triangle-points))
+				(vector2-sub (car triangle-points)
+					     (cadr triangle-points))))
+	  (t-nom (vector2-dot (vector2-sub circle-center
+					   (car triangle-points))
+			      ac))
+	  (t-denom (vector2-dot (vector2-sub circle-center
+					     (caddr triangle-points))
+				(vector2-sub (car triangle-points)
+					     (caddr triangle-points)))))
+  )))||#
+
+;; :normal vs. :troop at some position
+(defun check-collision-machinegun-troop (projectile-position troop-position)
+  ;; We do not check for angle yet.
+  ;; A troop has a radius of 30; a machinegun projectile has a radius of 8
+  (<= (vector2-square-distance projectile-position troop-position)
+     (* 38 38)))
+
+;; :torpedo vs. :troop at some position
+(defun check-collision-torpedo-troop (projectile-position troop-position)
+  ;; We do not check for angle yet.
+  ;; A troop has a radius of 30; a torpedo projectile has a radius of 15
+  (<= (vector2-square-distance projectile-position troop-position)
+     (* 45 45)))
+
+(defun check-collision-player-troop (troop-position)
+  ;; We do not check for angle yet.
+  ;; A troop has a radius of 30; the player has a radius of 15
+  (<= (vector2-square-distance *ship-position* troop-position)
+     (* 45 45)))
+
 (defun update-projectiles (dt)
   ;; Projectiles are destroyed when out of play area on X axis.
   ;; They also wrap around on the Y axis, like the ship.
@@ -178,7 +261,7 @@
      when (not (null (cdr projectile)))
      do (let* ((projectile-type (car projectile))
 	       (projectile-info (cdr projectile))
-	       (projectile-position (projectile-info-position projectile-info))
+	       (projectile-position (projectile-info-position projectile-info) )
 	       (projectile-angle (projectile-info-angle projectile-info))
 	       (projectile-speed (case projectile-type
 				   ((:normal) 1.3)
@@ -195,11 +278,24 @@
 				    (* projectile-speed
 				       (- (cos projectile-angle))
 				       dt))
-				 (max-y)))))))
-     ;; Collision detection
-     ;; Compare projectile position for each enemy onscreen
-       
-       ))
+				 (max-y))))))
+	  ;; Collision detection
+	  ;; Compare projectile position for each enemy onscreen
+	  (loop for enemy in *onscreen-enemies*
+	     do (when (case projectile-type
+			((:normal) (check-collision-machinegun-troop
+				    projectile-position
+				    (enemy-position enemy)))
+			((:torpedo) (check-collision-torpedo-troop
+				     projectile-position
+				     (enemy-position enemy)))
+			(otherwise nil))
+		  (setf (cdr projectile) nil)
+		  (decf (enemy-health enemy) (case projectile-type
+					       ((:normal) 2)
+					       ((:torpedo) 10)
+					       (otherwise 0)))
+		  (setf (enemy-flash enemy) 150))))))
 
 (defun draw-projectiles ()
   (loop for projectile in *projectile-pool*
@@ -308,11 +404,11 @@
 (defun draw-hud ()
   ;; Debug level pace
   (gl:with-pushed-matrix
-    (gsk-util:transform-translate '(10 20))
+    (gsk-util:transform-translate '(20 20))
     (gsk-util:with-fill-color '(255 255 255)
       (gsk-util:no-stroke)
       (gsk-util:text-size 1.0)
-      (gsk-util:text (format nil "levelposition: ~12,'0d" *level-position*)
+      (gsk-util:text (format nil "~4,'0d" *level-position*)
 		     '(0 0))))
   ;; Line
   (gl:with-pushed-matrix
@@ -390,7 +486,10 @@
     (update-projectiles dt)
     (level-update dt)
     (loop for enemy in *onscreen-enemies*
-       do (update-enemy enemy dt))
+       do (when (check-collision-player-troop (enemy-position enemy))
+	    (setf (enemy-alive enemy) nil)
+	    (decf *ship-health* 25))
+	 (update-enemy enemy dt))
     (setf *onscreen-enemies*
 	  (remove-if (lambda (enemy)
 		       (eq (enemy-alive enemy) nil))
@@ -407,7 +506,7 @@
 
 (defun load-placeholder-level ()
   (setf *level-layout* (make-hash-table))
-  (loop for x from 0 to 9
+  (loop for x from 0 to 5
      do (let ((base-time (* x 40)))
 	  (setf (gethash base-time *level-layout*)
 		'((:troop 100)
@@ -415,7 +514,25 @@
 		  (:troop 400)))
 	  (setf (gethash (+ base-time 20) *level-layout*)
 		'((:troop 175)
-		  (:troop 325))))))
+		  (:troop 325)))))
+  ;; Troops to the middle
+  (setf (gethash 260 *level-layout*) '((:troop 230)))
+  (setf (gethash 265 *level-layout*) '((:troop 180)
+				       (:troop 280)))
+  (setf (gethash 270 *level-layout*) '((:troop 130)
+				       (:troop 330)))
+  ;; Troops on the top
+  (setf (gethash 290 *level-layout*) '((:troop 180)))
+  (setf (gethash 295 *level-layout*) '((:troop 130)
+				       (:troop 230)))
+  (setf (gethash 300 *level-layout*) '((:troop 80)
+				       (:troop 280)))
+  ;; Troops below
+  (setf (gethash 320 *level-layout*) '((:troop 280)))
+  (setf (gethash 325 *level-layout*) '((:troop 230)
+				       (:troop 330)))
+  (setf (gethash 330 *level-layout*) '((:troop 180)
+				       (:troop 380))))
   
 				      
 
