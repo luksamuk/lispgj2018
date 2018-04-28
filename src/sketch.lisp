@@ -132,6 +132,7 @@
 (defparameter *ship-current-gun* :normal)
 (defparameter *ship-weapon-cooldown* 0)
 (defparameter *ship-torpedo-cooldown* 500)
+(defparameter *ship-health* 100)
 
 
 ;; Projectiles stuff
@@ -343,6 +344,22 @@
       (gsk-util:no-stroke)
       (gsk-util:text-size 3.0)
       (gsk-util:text (format nil "x~3,'0d" 0) '(0 0))))
+  ;; Ship health indicator
+  (gl:with-pushed-matrix
+      (gsk-util:transform-translate (list (- (/ (max-x) 2.0) 40.0)
+					  (+ (max-y) 40)))
+    (gsk-util:no-fill)
+    (gsk-util:with-stroke-color '(128 20 0)
+      (gsk-util:with-stroke-weight 3.0
+	(gsk-util:arc '(0 0)
+		      '(50 50)
+		      0
+		      (/ (* (* 2.0 pi)
+			    *ship-health*)
+			 100.0))))
+    (gsk-util:with-stroke-color '(255 255 255)
+      (gsk-util:text-size 1.0)
+      (gsk-util:text "Health" '(-20 0))))
   ;; Score indicator
   (gl:with-pushed-matrix
     (gsk-util:transform-translate (list (- (max-x) 320)
@@ -418,6 +435,7 @@
     (setf *ship-current-gun* :normal)
     (setf *ship-position* (from-center '(-400 0)))
     (setf *ship-weapon-cooldown* 0)
+    (setf *ship-health* 100)
     (setf *projectile-pool*
 	  (loop for x from 1 to *projectile-max*
 	     collect (cons :normal nil)))))
