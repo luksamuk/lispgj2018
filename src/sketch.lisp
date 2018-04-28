@@ -68,6 +68,7 @@
   type
   position
   angle
+  health
   (alive t))
 
 (defmethod update-troop (troop dt)
@@ -193,7 +194,11 @@
 				    (* projectile-speed
 				       (- (cos projectile-angle))
 				       dt))
-				 (max-y)))))))))
+				 (max-y)))))))
+     ;; Collision detection
+     ;; Compare projectile position for each enemy onscreen
+       
+       ))
 
 (defun draw-projectiles ()
   (loop for projectile in *projectile-pool*
@@ -350,7 +355,7 @@
 		     '(0 0))
       ;; High-score
       (gsk-util:transform-translate '(0 30))
-      (gsk-util:text (format nil "High:  ~12,'0d" 100)
+      (gsk-util:text (format nil "High:  ~12,'0d" *high*)
 		     '(0 0)))))
 
 (defun setup ()
@@ -360,6 +365,8 @@
 (defun update (dt)
   (when (gsk-input:pressedp :start)
     (setf *paused* (not *paused*)))
+  (when (gsk-input:pressedp :b)
+    (restart-game))
   (when (not *paused*)
     (update-stars dt)
     (update-ship dt)
@@ -402,6 +409,7 @@
     (when (> *score* *high*)
       (setf *high* *score*))
     (setf *level-position* 0)
+    (setf *level-last-spawn-moment* 0)
     (setf *onscreen-enemies* nil)
     ;; TODO: reload level 0
     ;; for now we're loading the placeholder level.

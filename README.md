@@ -1,4 +1,4 @@
-# lispgj2018
+# ODS: Orbit Defense Strikeforce
 My entry on Lisp Game Jam 2018.
 
 This game is written in Common Lisp, built using SBCL, Emacs+SLIME, and Quicklisp.
