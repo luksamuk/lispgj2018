@@ -425,13 +425,12 @@
 
 (defun draw-hud ()
   ;; Debug level pace
-  (gl:with-pushed-matrix
-    (gsk-util:transform-translate '(20 20))
-    (gsk-util:with-fill-color '(255 255 255)
-      (gsk-util:no-stroke)
-      (gsk-util:text-size 1.0)
-      (gsk-util:text (format nil "~4,'0d" *level-position*)
-		     '(0 0))))
+  ;;(gl:with-pushed-matrix
+  ;;  (gsk-util:transform-translate '(20 520))
+  ;;  (gsk-util:with-fill-color '(255 255 255)
+  ;;    (gsk-util:no-stroke)
+  ;;    (gsk-util:text-size 1.0)
+  ;;    (gsk-util:text (format nil "~4,'0d" *level-position*) '(0 0))))
   ;; Line
   (gl:with-pushed-matrix
     (gsk-util:no-fill)
@@ -521,7 +520,13 @@
 	    (gsk-util:text-size 3.0)
 	    (gsk-util:text "*press start to play*" '(-250 150))
 	    (gsk-util:text-size 1.0)
-	    (gsk-util:text "Copyright (C) 2018 Lucas Vieira" '(220 -170)))
+	    (gsk-util:text "Copyright (C) 2018 Lucas Vieira" '(220 -170))
+	    ;; Controls
+	    (gsk-util:text "Controls:" '(-450 -170))
+	    (gsk-util:text "W, S  = Move ship" '(-450 -150))
+	    (gsk-util:text "K     = Shoot" '(-450 -130))
+	    (gsk-util:text "I     = Change weapon" '(-450 -110))
+	    (gsk-util:text "ENTER = Start" '(-450 -90)))
 	  ;; Game over screen
 	  (progn
 	    (gsk-util:text-size 5.0)
