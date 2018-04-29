@@ -588,38 +588,7 @@
     (draw-game-over-screen)))
 
 
-(defun load-level-1 ()
-  (setf *level-layout* (make-hash-table))
-  (setf *level-size* 530)
-  (loop for x from 0 to 5
-     do (let ((base-time (* x 40)))
-	  (setf (gethash base-time *level-layout*)
-		'((:troop 100)
-		  (:troop 250)
-		  (:troop 400)))
-	  (setf (gethash (+ base-time 20) *level-layout*)
-		'((:troop 175)
-		  (:troop 325)))))
-  ;; Troops to the middle
-  (loop for x from 0 to 5
-     do (let ((base-time (+ 260 (* x 30))))
-	  (setf (gethash base-time *level-layout*) '((:troop 230)))
-	  (setf (gethash (+ base-time 5) *level-layout*) '((:troop 180)
-							   (:troop 280)))
-	  (setf (gethash (+ base-time 10) *level-layout*) '((:troop 130)
-							    (:troop 330)))
-	  ;; Troops on the top
-	  (setf (gethash (+ base-time 30) *level-layout*) '((:troop 180)))
-	  (setf (gethash (+ base-time 35) *level-layout*) '((:troop 130)
-							    (:troop 230)))
-	  (setf (gethash (+ base-time 40) *level-layout*) '((:troop 80)
-							    (:troop 280)))
-	  ;; Troops below
-	  (setf (gethash (+ base-time 60) *level-layout*) '((:troop 280)))
-	  (setf (gethash (+ base-time 65) *level-layout*) '((:troop 230)
-							    (:troop 330)))
-	  (setf (gethash (+ base-time 70) *level-layout*) '((:troop 180)
-							    (:troop 380))))))
+(load "levels.lisp")
 
 
 (defun load-level (which)
