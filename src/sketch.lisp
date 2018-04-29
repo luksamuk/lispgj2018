@@ -176,6 +176,7 @@
 (defparameter *ship-health* 100)
 (defparameter *ship-ammo* 20)
 (defparameter *ship-alive* t)
+(defparameter *ship-flash* 0)
 
 
 ;; Projectiles stuff
@@ -242,35 +243,6 @@
 		    (cadr a))))
     (+ (* delta-x delta-x)
        (* delta-y delta-y))))
-
-#||(defun closest-pt-point-triangle (circle-center triangle-points)
-  ;; YAP, DO NOT USE THIS, this is not complete -- obviously.
-  ;; triangle points is a list (a b c) where each letter is a vertex
-  ;; on the triangle.
-  ;; Also, sorry for the nested let blocks here. I'm trying to organize
-  ;; my thoughts.
-  (let ((ab (vector2-sub (cadr triangle-points)
-			 (car triangle-points)))
-	(ac (vector2-sub (caddr triangle-points)
-			 (car triangle-points)))
-	(bc (vector2-sub (caddr triangle-points)
-			 (cadr triangle-points))))
-    ;; Compute parametric positions
-    (let ((s-nom (vector2-dot (vector2-sub circle-center
-					   (car triangle-points))
-			      ab))
-	  (s-denom (vector2-dot (vector2-sub circle-center
-					     (cadr triangle-points))
-				(vector2-sub (car triangle-points)
-					     (cadr triangle-points))))
-	  (t-nom (vector2-dot (vector2-sub circle-center
-					   (car triangle-points))
-			      ac))
-	  (t-denom (vector2-dot (vector2-sub circle-center
-					     (caddr triangle-points))
-				(vector2-sub (car triangle-points)
-					     (caddr triangle-points)))))
-  )))||#
 
 ;; :normal vs. :troop at some position
 (defun check-collision-machinegun-troop (projectile-position troop-position)
@@ -405,7 +377,10 @@
   ;; Kill ship
   (when (<= *ship-health* 0)
     (setf *ship-alive* nil)
-    (setf *game-over* t)))
+    (setf *game-over* t))
+  ;; Flash ship
+  (when (> *ship-flash* 0) (decf *ship-flash* dt))
+  (when (< *ship-flash* 0) (setf *ship-flash* 0)))
 
 
 (defun draw-ship ()
@@ -414,7 +389,11 @@
     (gsk-util:transform-rotate (+ *ship-rotation* (/ pi 2.0)))
     (gsk-util:no-fill)
     (gsk-util:with-stroke-color '(255 255 255)
-      (gsk-util:triangle '(0 -15) '(9 12) '(-9 12)))))
+      (if (> *ship-flash* 0)
+	  (gsk-util:fill-primitive '(255 80 30 180))
+	  (gsk-util:no-fill))
+      (gsk-util:triangle '(0 -15) '(9 12) '(-9 12))
+      (gsk-util:no-fill))))
 
 
 ;;; HUD-related
@@ -577,6 +556,7 @@
        do (when (and *ship-alive*
 		   (check-collision-player-troop (enemy-position enemy)))
 	    (setf (enemy-alive enemy) nil)
+	    (setf *ship-flash* 450)
 	    (decf *ship-health* 25))
 	 (update-enemy enemy dt))
     (setf *onscreen-enemies*
@@ -626,10 +606,11 @@
   (setf *ship-health* 100)
   (setf *ship-ammo* 20)
   (setf *ship-alive* t)
+  (setf *ship-flash* 0)
   (setf *projectile-pool*
 	(loop for x from 1 to *projectile-max*
 	   collect (cons :normal nil))))
-    
+
 
 (gsk:add-setup-callback 'setup)
 (gsk:add-update-callback 'update)
