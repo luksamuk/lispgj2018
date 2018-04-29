@@ -389,6 +389,12 @@
     (gsk-util:transform-rotate (+ *ship-rotation* (/ pi 2.0)))
     (gsk-util:no-fill)
     (gsk-util:with-stroke-color '(255 255 255)
+      ;; BUG:
+      ;; This flashing thing somehow changes the color
+      ;; of the ammo and health texts as well.
+      ;; I won't fix it because it is just too convenient so,
+      ;; if I somehow manage to remove it, this is more like a
+      ;; reminder to add it again. XP
       (if (> *ship-flash* 0)
 	  (gsk-util:fill-primitive '(255 80 30 180))
 	  (gsk-util:no-fill))
