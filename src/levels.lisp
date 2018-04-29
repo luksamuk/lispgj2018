@@ -23,9 +23,8 @@
 (defmacro enemy-spawn (time enemy-list)
   `(setf (gethash ,time *level-layout*) ,enemy-list))
 
-(defmacro with-level-size (level-size &body body)
-  (setf *level-layout* (make-hash-table))
-  `(setf *level-size* ,level-size)
+(defmacro with-new-level (&body body)
+  `(setf *level-layout* (make-hash-table))
   `(progn ,@body))
 
 ;; Duration: 30
@@ -40,7 +39,7 @@
 
 
 (defun load-level-1 ()
-  (with-level-size 560
+  (with-new-level
     (loop for x from 0 to 5
        do (let ((base-time (* x 40)))
 	    (enemy-spawn base-time '((:troop 100)

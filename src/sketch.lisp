@@ -212,7 +212,14 @@
 		;; Position is the tip of the ship
 		:position (list (+ (car *ship-position*) 9)
 				(cadr *ship-position*))
-		:angle (+ *ship-rotation* (/ pi 2.0)))))
+		:angle (if (eq *ship-current-gun* :torpedo)
+			   ;; Torpedoes are always straight, related to the ship
+			   (+ *ship-rotation* (/ pi 2.0))
+			   ;; The machinegun, though, gotta be a little random...
+			   (+ *ship-rotation*
+			      (/ pi 2.0)
+			      (- (gsk-util:deg-to-rad 5))
+			      (gsk-util:deg-to-rad (random 10)))))))
        (return-from find-free-projectile)))
 
 ;; Collision detection functions
@@ -593,7 +600,9 @@
 
 (defun load-level (which)
   (case which
-    ((1) (load-level-1))
+    ((1)
+     (setf *level-size* 550)
+     (load-level-1))
     ((2)
      ;; TO-DO
      )))
