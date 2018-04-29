@@ -547,7 +547,7 @@
 
 ;;; General
 (defun setup ()
-  (gsk-util:set-font-texture "../res/gohufont.png" '(8 13)))
+  (gsk-util:set-font-texture "res/gohufont.png" '(8 13)))
 
 (defun update (dt)
   ;; Restart or begin game when needed
