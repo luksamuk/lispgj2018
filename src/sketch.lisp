@@ -132,7 +132,8 @@
 
 (defun level-update (dt)
   (when *ship-alive* (incf *level-step* dt))
-  (when (> *level-step* *level-pace*)
+  (when (and (not *game-over*)
+	   (> *level-step* *level-pace*))
     (setf *level-step* (mod *level-step*
 			    *level-pace*))
     (incf *level-position*)
@@ -143,7 +144,9 @@
 	;; spawn stuff
 	(loop for enemy in spawn-data
 	   do (spawn-enemy (car enemy) (cadr enemy)))
-	(setf *level-last-spawn-moment* *level-position*)))))
+	(setf *level-last-spawn-moment* *level-position*))))
+  (when (> *level-position* *level-size*)
+    (setf *game-over* t)))
 
 
 ;;; Ship-related
@@ -571,6 +574,7 @@
 
 (defun load-level-1 ()
   (setf *level-layout* (make-hash-table))
+  (setf *level-size* 530)
   (loop for x from 0 to 5
      do (let ((base-time (* x 40)))
 	  (setf (gethash base-time *level-layout*)
